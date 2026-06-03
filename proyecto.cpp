@@ -9,7 +9,6 @@
 
 using namespace std;
 
-
 // ============================================================
 // ESTRUCTURAS
 // ============================================================
@@ -21,6 +20,7 @@ struct Usuario {
     string contrasena;
     string direccion;
     string metodoDePago;
+    bool tieneBono50; // MODIFICADO: Para rastrear si el usuario ganó el bono
 };
 
 struct Producto {
@@ -56,6 +56,7 @@ struct OrdenDeCompra {
     Usuario usuario;
     vector<ItemCarrito> productos;
     double subtotal;
+    double descuentoBono; // MODIFICADO: Para registrar el descuento del 50% aplicado
     double impuestos;
     double envio;
     double total;
@@ -78,7 +79,6 @@ int proximoIdOrden = 1;
 // UTILIDADES
 // ============================================================
 
-
 string aMayusculas(string texto) {
     for (size_t i = 0; i < texto.size(); i++) {
         texto[i] = toupper((unsigned char)texto[i]);
@@ -94,8 +94,32 @@ double calcularSubtotal(const vector<ItemCarrito>& items) {
     return subtotal;
 }
 
+string enteroAString(int numero) {
+    ostringstream ss;
+    ss << numero;
+    return ss.str();
+}
+
+Usuario* buscarUsuarioPorId(int id) {
+    for (size_t i = 0; i < usuarios.size(); i++) {
+        if (usuarios[i].idUsuario == id) {
+            return &usuarios[i];
+        }
+    }
+    return NULL;
+}
+
+Producto* buscarProductoPorId(int id) {
+    for (size_t i = 0; i < productos.size(); i++) {
+        if (productos[i].idProducto == id) {
+            return &productos[i];
+        }
+    }
+    return NULL;
+}
+
 // ============================================================
-// AGREGAR DATOS
+// AGREGAR DATOS INICIALES
 // ============================================================
 
 void addU(int id, string nom, string corr, string contra, string dir, string pago) {
@@ -106,6 +130,7 @@ void addU(int id, string nom, string corr, string contra, string dir, string pag
     u.contrasena = contra;
     u.direccion = dir;
     u.metodoDePago = pago;
+    u.tieneBono50 = false; // MODIFICADO: Inicializa sin bonos
     usuarios.push_back(u);
 }
 
@@ -130,14 +155,12 @@ void addC(int id, string pNom, string uNom, string txt, string f) {
 }
 
 void cargarDatos() {
-    // Usuarios
     addU(1, "Juan Perez", "juan.perez@email.com", "Qwerty123", "Carrera 45 #10-20", "Tarjeta de credito");
     addU(2, "Ana Gomez", "ana.gomez@email.com", "Pass456", "Calle 21 #35-50", "PayPal");
     addU(3, "Carlos Ruiz", "carlos.ruiz@email.com", "Segura789", "Avenida Principal #100", "Transferencia bancaria");
     addU(4, "Sofia Martinez", "sofia.martinez@email.com", "Clave987", "Calle 8 #20-30", "Efectivo");
     addU(5, "Diego Fernandez", "diego.fernandez@email.com", "Contra654", "Carrera 77 #40-60", "Tarjeta debito");
 
-    // Productos
     string nombres[] = {
         "Laptop","Smartphone","Tablet","Auriculares","Teclado",
         "Mouse","Monitor","Impresora","Camara","Smartwatch",
@@ -152,148 +175,68 @@ void cargarDatos() {
     };
 
     string descripciones[] = {
-        "Portatil con pantalla Full HD y SSD de 512GB",
-        "Telefono con camara de 108MP y carga rapida",
-        "Dispositivo con pantalla tactil de 10 pulgadas",
-        "Audifonos inalambricos con cancelacion de ruido",
-        "Teclado mecanico con iluminacion RGB",
-        "Raton inalambrico con sensor optico de alta precision",
-        "Pantalla LED 4K de 27 pulgadas",
-        "Laser multifuncional con Wi-Fi",
-        "Camara digital con lente profesional",
-        "Reloj inteligente con GPS y monitoreo cardiaco",
-        "Silla ergonomica ajustable con soporte lumbar",
-        "Horno microondas con multiples funciones",
-        "Frigorifico doble puerta con sistema No Frost",
-        "Lavadora automatica con capacidad de 10kg",
-        "Cafetera express con vaporizador de leche",
-        "Drone con camara 4K y estabilizador",
-        "Altavoz portatil con sonido envolvente",
-        "Videocamara profesional con grabacion en 4K",
-        "Televisor inteligente de 55 pulgadas con HDR",
-        "Bateria de 20000mAh con carga rapida",
-        "Disco duro externo de 2TB",
-        "Pendrive de 128GB",
-        "Router Wi-Fi 6 de alta velocidad",
-        "Control inalambrico para videojuegos",
-        "Fuente de alimentacion para PC de 750W",
-        "Unidad de almacenamiento SSD de 1TB",
-        "Par de bocinas estereo con subwoofer",
-        "Camara web Full HD con microfono integrado",
-        "CPU Intel i7 de ultima generacion",
-        "Placa base compatible con procesadores modernos",
-        "Modulo de RAM DDR4 de 16GB",
-        "Panel solar portatil con bateria integrada",
-        "Mando universal para TV y dispositivos",
-        "Termostato digital programable",
-        "Cerradura electronica con huella digital",
-        "Proyector LED con resolucion Full HD",
-        "Switch de red de 8 puertos",
-        "Reloj inteligente con pantalla AMOLED",
-        "Tiras LED RGB con control remoto",
-        "Estabilizador de voltaje para dispositivos electronicos",
-        "Base de carga inalambrica rapida",
-        "Disco duro portatil de 4TB",
-        "Microfono profesional para grabacion",
-        "Asistente de voz con altavoz integrado",
-        "Amplificador de senal inalambrico",
-        "Aire acondicionado portatil con control remoto",
-        "Kit de desarrollo con Raspberry Pi 4",
-        "Placa de captura de video en alta resolucion",
-        "Enchufe inteligente compatible con asistentes virtuales",
+        "Portatil con pantalla Full HD y SSD de 512GB", "Telefono con camara de 108MP y carga rapida",
+        "Dispositivo con pantalla tactil de 10 pulgadas", "Audifonos inalambricos con cancelacion de ruido",
+        "Teclado mecanico con iluminacion RGB", "Raton inalambrico con sensor optico de alta precision",
+        "Pantalla LED 4K de 27 pulgadas", "Laser multifuncional con Wi-Fi",
+        "Camara digital con lente profesional", "Reloj inteligente con GPS y monitoreo cardiaco",
+        "Silla ergonomica ajustable con soporte lumbar", "Horno microondas con multiples funciones",
+        "Frigorifico doble puerta con sistema No Frost", "Lavadora automatica con capacidad de 10kg",
+        "Cafetera express con vaporizador de leche", "Drone con camara 4K y estabilizador",
+        "Altavoz portatil con sonido envolvente", "Videocamara profesional con grabacion en 4K",
+        "Televisor inteligente de 55 pulgadas con HDR", "Bateria de 20000mAh con carga rapida",
+        "Disco duro externo de 2TB", "Pendrive de 128GB", "Router Wi-Fi 6 de alta velocidad",
+        "Control inalambrico para videojuegos", "Fuente de alimentacion para PC de 750W",
+        "Unidad de almacenamiento SSD de 1TB", "Par de bocinas estereo con subwoofer",
+        "Camara web Full HD con microfono integrado", "CPU Intel i7 de ultima generacion",
+        "Placa base compatible con procesadores modernos", "Modulo de RAM DDR4 de 16GB",
+        "Panel solar portatil con bateria integrada", "Mando universal para TV y dispositivos",
+        "Termostato digital programable", "Cerradura electronica con huella digital",
+        "Proyector LED con resolucion Full HD", "Switch de red de 8 puertos",
+        "Reloj inteligente con pantalla AMOLED", "Tiras LED RGB con control remoto",
+        "Estabilizador de voltaje para dispositivos electronicos", "Base de carga inalambrica rapida",
+        "Disco duro portatil de 4TB", "Microfono profesional para grabacion",
+        "Asistente de voz con altavoz integrado", "Amplificador de senal inalambrico",
+        "Aire acondicionado portatil con control remoto", "Kit de desarrollo con Raspberry Pi 4",
+        "Placa de captura de video en alta resolucion", "Enchufe inteligente compatible con asistentes virtuales",
         "Timbre con camara y conexion a Wi-Fi"
     };
 
     double precios[] = {
-        89999,49950,29999,12999,8999,
-        5999,49900,17999,79999,19999,
-        29999,12999,119999,59999,14999,
-        69999,8999,99999,74999,3999,
-        12999,2999,19999,7999,8999,
-        14999,13999,6999,34999,19999,
-        7999,24999,2499,9999,19999,
-        29999,5999,8999,3999,15999,
-        4999,17999,14999,12999,7999,
-        29999,12999,19999,3999,14999
+        89999,49950,29999,12999,8999, 5999,49900,17999,79999,19999,
+        29999,12999,119999,59999,14999, 69999,8999,99999,74999,3999,
+        12999,2999,19999,7999,8999, 14999,13999,6999,34999,19999,
+        7999,24999,2499,9999,19999, 29999,5999,8999,3999,15999,
+        4999,17999,14999,12999,7999, 29999,12999,19999,3999,14999
     };
 
     int stocks[] = {
-        10,20,15,25,30,
-        50,12,18,8,22,
-        14,40,5,7,35,
-        9,33,6,11,45,
-        28,60,16,20,17,
-        32,23,37,9,13,
-        41,4,50,22,6,
-        12,38,26,55,10,
-        30,15,7,20,33,
-        5,19,8,42,10
+        10,20,15,25,30, 50,12,18,8,22, 14,40,5,7,35, 9,33,6,11,45,
+        28,60,16,20,17, 32,23,37,9,13, 41,4,50,22,6, 12,38,26,55,10,
+        30,15,7,20,33, 5,19,8,42,10
     };
 
     for (int i = 0; i < 50; i++) {
         addP(i + 1, nombres[i], descripciones[i], precios[i], stocks[i]);
     }
 
-    // Comentarios
-    addC(1,  "Laptop", "Juan Perez", "Excelente rendimiento; muy rapida. Me encanta.", "2025-05-01");
-    addC(2,  "Smartphone", "Ana Gomez", "Buena camara pero la bateria dura poco.", "2025-05-03");
-    addC(3,  "Tablet", "Carlos Ruiz", "No me gusto; pantalla de baja calidad.", "2025-05-05");
-    addC(4,  "Auriculares", "Sofia Martinez", "Sonido aceptable pero el material parece fragil.", "2025-05-06");
-    addC(5,  "Teclado", "Diego Fernandez", "Muy buen teclado mecanico; excelente respuesta.", "2025-05-08");
-    addC(6,  "Mouse", "Ana Gomez", "El sensor no es tan preciso como esperaba.", "2025-05-10");
-    addC(7,  "Monitor", "Carlos Ruiz", "Colores vibrantes y buena resolucion. Muy satisfecho.", "2025-05-12");
-    addC(8,  "Impresora", "Juan Perez", "Tarda mucho en imprimir; no me convence.", "2025-05-13");
-    addC(9,  "Camara", "Sofia Martinez", "Increible calidad de imagen; fotos super nitidas.", "2025-05-15");
-    addC(10, "Smartwatch", "Diego Fernandez", "Buena bateria; pero la pantalla no es muy brillante.", "2025-05-18");
-    addC(11, "Silla Gamer", "Lucia Rodriguez", "Comodidad espectacular; perfecto para largas sesiones.", "2025-05-20");
-    addC(12, "Microondas", "Andres Ramirez", "Calienta bien pero hace mucho ruido.", "2025-05-22");
-    addC(13, "Refrigerador", "Maria Garcia", "Espacioso y enfria rapido; muy recomendado.", "2025-05-24");
-    addC(14, "Lavadora", "Javier Martinez", "Lava bien pero el ciclo es muy largo.", "2025-05-26");
-    addC(15, "Cafetera", "Carolina Lopez", "Hace cafe delicioso; facil de usar.", "2025-05-28");
-    addC(16, "Drone", "Daniel Castro", "Muy divertido pero la bateria dura poco.", "2025-05-30");
-    addC(17, "Bocina Bluetooth", "Paola Herrera", "Sonido potente y buena conexion Bluetooth.", "2025-06-01");
-    addC(18, "Videocamara", "Esteban Rojas", "Perfecta para grabaciones profesionales.", "2025-06-03");
-    addC(19, "TV LED", "Fernanda Sanchez", "Imagen excelente pero el sonido podria mejorar.", "2025-06-05");
-    addC(20, "Bateria Externa", "Camilo Torres", "Carga bien pero es un poco pesada.", "2025-06-07");
+    addC(1, "Laptop", "Juan Perez", "Excelente rendimiento.", "2025-05-01");
 }
 
 void mostrarCatalogo() {
     cout << "\n===== CATALOGO DE PRODUCTOS =====\n";
-    cout << left
-         << setw(4)  << "ID"
-         << setw(22) << "Nombre"
-         << setw(12) << "Precio"
-         << setw(7)  << "Stock"
-         << endl;
+    cout << left << setw(4) << "ID" << setw(22) << "Nombre" << setw(12) << "Precio" << setw(7) << "Stock" << endl;
     cout << string(50, '-') << endl;
 
     for (size_t i = 0; i < productos.size(); i++) {
-        cout << left
-             << setw(4)  << productos[i].idProducto
-             << setw(22) << productos[i].nombre
-             << "$" << setw(11) << fixed << setprecision(2) << productos[i].precio
-             << setw(7)  << productos[i].stock
-             << endl;
+        cout << left << setw(4) << productos[i].idProducto << setw(22) << productos[i].nombre
+             << "$" << setw(11) << fixed << setprecision(2) << productos[i].precio << setw(7) << productos[i].stock << endl;
     }
 }
 
-Usuario* buscarUsuarioPorId(int id) {
-    for (size_t i = 0; i < usuarios.size(); i++) {
-        if (usuarios[i].idUsuario == id) {
-            return &usuarios[i];
-        }
-    }
-    return NULL;
-}
-
-Producto* buscarProductoPorId(int id) {
-    for (size_t i = 0; i < productos.size(); i++) {
-        if (productos[i].idProducto == id) {
-            return &productos[i];
-        }
-    }
-    return NULL;
-}
+// ============================================================
+// LOGICA DE CARRITOS (PUNTO 1)
+// ============================================================
 
 int contarCarritosActivos(int idUsuario) {
     int cnt = 0;
@@ -331,14 +274,10 @@ void listarCarritosUsuario(int idUsuario) {
             hay = true;
             cout << "Carrito #" << carritosGlobales[i].idCarrito
                  << " | items: " << carritosGlobales[i].items.size()
-                 << " | estado: " << (carritosGlobales[i].pagado ? "PAGADO" : "ACTIVO")
-                 << endl;
+                 << " | estado: " << (carritosGlobales[i].pagado ? "PAGADO" : "ACTIVO") << endl;
         }
     }
-
-    if (!hay) {
-        cout << "Este usuario no tiene carritos.\n";
-    }
+    if (!hay) cout << "Este usuario no tiene carritos.\n";
 }
 
 int crearCarrito(int idUsuario) {
@@ -351,8 +290,8 @@ int crearCarrito(int idUsuario) {
     c.idCarrito = proximoIdCarrito++;
     c.idUsuario = idUsuario;
     c.pagado = false;
-    carritosGlobales.push_back(c);
 
+    carritosGlobales.push_back(c);
     cout << "[+] Carrito #" << c.idCarrito << " creado correctamente.\n";
     return c.idCarrito;
 }
@@ -376,30 +315,26 @@ void listarCarrito(int idCarrito, int idUsuario) {
         return;
     }
 
-    cout << left
-         << setw(4)  << "ID"
-         << setw(22) << "Nombre"
-         << setw(8)  << "Cant."
-         << setw(12) << "P.Unit."
-         << "Subtotal\n";
+    cout << left << setw(4) << "ID" << setw(22) << "Nombre" << setw(8) << "Cant." << setw(12) << "P.Unit." << "Subtotal\n";
     cout << string(55, '-') << endl;
 
-    double subtotal = 0.0;
+    double subtotal = calcularSubtotal(c.items);
     for (size_t i = 0; i < c.items.size(); i++) {
         const ItemCarrito& it = c.items[i];
         double sub = it.producto.precio * it.cantidad;
-        subtotal += sub;
-
-        cout << left
-             << setw(4)  << it.producto.idProducto
-             << setw(22) << it.producto.nombre
-             << setw(8)  << it.cantidad
-             << "$" << setw(11) << fixed << setprecision(2) << it.producto.precio
-             << "$" << fixed << setprecision(2) << sub << endl;
+        cout << left << setw(4) << it.producto.idProducto << setw(22) << it.producto.nombre << setw(8) << it.cantidad
+             << "$" << setw(11) << fixed << setprecision(2) << it.producto.precio << "$" << fixed << setprecision(2) << sub << endl;
     }
 
     cout << string(55, '-') << endl;
     cout << right << setw(48) << "SUBTOTAL: $" << fixed << setprecision(2) << subtotal << endl;
+
+    // MODIFICADO: Informar en el carrito si se aplicará un bono de descuento
+    if (u && u->tieneBono50 && !c.pagado) {
+        double descEstimado = subtotal * 0.5;
+        cout << right << setw(48) << "BONO ACTIVO (50%): -$" << fixed << setprecision(2) << descEstimado << endl;
+        cout << right << setw(48) << "SUBTOTAL CON DESCUENTO: $" << fixed << setprecision(2) << (subtotal - descEstimado) << endl;
+    }
 }
 
 void agregarAlCarrito(int idCarrito, int idUsuario) {
@@ -410,14 +345,9 @@ void agregarAlCarrito(int idCarrito, int idUsuario) {
     }
 
     mostrarCatalogo();
-
-    int idProducto;
-    int cantidad;
-
-    cout << "ID del producto: ";
-    cin >> idProducto;
-    cout << "Cantidad: ";
-    cin >> cantidad;
+    int idProducto, cantidad;
+    cout << "ID del producto: "; cin >> idProducto;
+    cout << "Cantidad: "; cin >> cantidad;
 
     if (cantidad <= 0) {
         cout << "[!] La cantidad debe ser mayor que cero.\n";
@@ -451,8 +381,11 @@ void agregarAlCarrito(int idCarrito, int idUsuario) {
     p->stock -= cantidad;
 
     cout << "[+] Producto agregado correctamente al carrito.\n";
-    cout << "Stock restante: " << p->stock << endl;
 }
+
+// ============================================================
+// GENERACIÓN DE ARCHIVOS (PUNTO 2)
+// ============================================================
 
 void generarOrdenTxt(const OrdenDeCompra& o) {
     ostringstream nombreArchivo;
@@ -465,47 +398,38 @@ void generarOrdenTxt(const OrdenDeCompra& o) {
     }
 
     archivo << "========================================\n";
-    archivo << "             ORDEN DE COMPRA\n";
+    archivo << "              ORDEN DE COMPRA\n";
     archivo << "========================================\n";
     archivo << "ID ORDEN : " << o.idOrden << "\n";
     archivo << "USUARIO  : " << o.usuario.idUsuario << "\n";
     archivo << "NOMBRE   : " << o.usuario.nombre << "\n";
-    archivo << "CORREO   : " << o.usuario.correoElectronico << "\n";
     archivo << "DIRECCION: " << o.usuario.direccion << "\n";
-    archivo << "PAGO     : " << o.usuario.metodoDePago << "\n";
     archivo << "----------------------------------------\n";
     archivo << "PRODUCTOS\n";
-    archivo << left
-            << setw(4)  << "ID"
-            << setw(22) << "Nombre"
-            << setw(8)  << "Cant."
-            << setw(12) << "P.Unit."
-            << "Subtotal\n";
+    archivo << left << setw(4) << "ID" << setw(22) << "Nombre" << setw(8) << "Cant." << setw(12) << "P.Unit." << "Subtotal\n";
     archivo << string(55, '-') << "\n";
 
     for (size_t i = 0; i < o.productos.size(); i++) {
         const ItemCarrito& it = o.productos[i];
-        double sub = it.producto.precio * it.cantidad;
-
-        archivo << left
-                << setw(4)  << it.producto.idProducto
-                << setw(22) << it.producto.nombre
-                << setw(8)  << it.cantidad
-                << "$" << setw(11) << fixed << setprecision(2) << it.producto.precio
-                << "$" << fixed << setprecision(2) << sub << "\n";
+        archivo << left << setw(4) << it.producto.idProducto << setw(22) << it.producto.nombre << setw(8) << it.cantidad
+                << "$" << setw(11) << fixed << setprecision(2) << it.producto.precio << "$" << fixed << setprecision(2) << (it.producto.precio * it.cantidad) << "\n";
     }
 
     archivo << string(55, '-') << "\n";
     archivo << right << setw(45) << "SUBTOTAL : $" << fixed << setprecision(2) << o.subtotal << "\n";
+    
+    // MODIFICADO: Incluir el bono de descuento si se aplicó
+    if (o.descuentoBono > 0) {
+        archivo << right << setw(45) << "DESCUENTO BONO (50%): -$" << fixed << setprecision(2) << o.descuentoBono << "\n";
+    }
+    
     archivo << right << setw(45) << "IMPUESTOS : $" << fixed << setprecision(2) << o.impuestos << "\n";
     archivo << right << setw(45) << "ENVIO     : $" << fixed << setprecision(2) << o.envio << "\n";
     archivo << right << setw(45) << "TOTAL     : $" << fixed << setprecision(2) << o.total << "\n";
     archivo << "========================================\n";
-    archivo << "Gracias por su compra!\n";
-    archivo << "========================================\n";
 
     archivo.close();
-    cout << "[+] Orden generada: " << nombreArchivo.str() << endl;
+    cout << "[+] Archivo de orden generado: " << nombreArchivo.str() << endl;
 }
 
 void pagarCarrito(int idCarrito, int idUsuario) {
@@ -517,49 +441,148 @@ void pagarCarrito(int idCarrito, int idUsuario) {
 
     Carrito& c = carritosGlobales[idx];
     if (c.items.empty()) {
-        cout << "[!] El carrito esta vacio. Agrega productos primero.\n";
+        cout << "[!] El carrito esta vacio.\n";
         return;
     }
 
     Usuario* u = buscarUsuarioPorId(idUsuario);
-    if (!u) {
-        cout << "[!] Usuario no encontrado.\n";
-        return;
-    }
 
     OrdenDeCompra o;
     o.idOrden = proximoIdOrden++;
     o.usuario = *u;
     o.productos = c.items;
-
     o.subtotal = calcularSubtotal(o.productos);
-    o.impuestos = o.subtotal * 0.19;
+    
+    // MODIFICADO: Procesar y aplicar bono del 50% si el usuario lo posee
+    if (u->tieneBono50) {
+        o.descuentoBono = o.subtotal * 0.5;
+        u->tieneBono50 = false; // Se consume el bono para el próximo carrito
+        cout << "[PROMO] ¡Bono del 50% de descuento aplicado con exito a esta compra!\n";
+    } else {
+        o.descuentoBono = 0.0;
+    }
+
+    // Los impuestos se calculan sobre el subtotal real neto (aplicando el descuento si lo hay)
+    double subtotalNeto = o.subtotal - o.descuentoBono;
+    o.impuestos = subtotalNeto * 0.19;
     o.envio = (o.subtotal >= 500000.0) ? 0.0 : 15000.0;
-    o.total = o.subtotal + o.impuestos + o.envio;
+    o.total = subtotalNeto + o.impuestos + o.envio;
 
     ordenes.push_back(o);
     c.pagado = true;
 
     cout << "\n[=] RESUMEN DE LA ORDEN #" << o.idOrden << "\n";
-    cout << "    Subtotal : $" << fixed << setprecision(2) << o.subtotal << "\n";
-    cout << "    Impuestos: $" << fixed << setprecision(2) << o.impuestos << "\n";
-    cout << "    Envio    : $" << fixed << setprecision(2) << o.envio << "\n";
-    cout << "    TOTAL    : $" << fixed << setprecision(2) << o.total << "\n";
+    cout << "    Subtotal : $" << o.subtotal << "\n";
+    if (o.descuentoBono > 0) {
+        cout << "    Descuento 50%: -$" << o.descuentoBono << "\n";
+    }
+    cout << "    Impuestos: $" << o.impuestos << "\n";
+    cout << "    Envio    : $" << o.envio << "\n";
+    cout << "    TOTAL    : $" << o.total << "\n";
 
     generarOrdenTxt(o);
 }
 
+// ============================================================
+// PRODUCTOS MÁS VENDIDOS (PUNTO 3)
+// ============================================================
+
+void listarProductosMasVendidos() {
+    cout << "\n===== PRODUCTOS MAS VENDIDOS =====\n";
+    cout << left << setw(5) << "ID" << setw(22) << "Nombre" << setw(10) << "Cant.Vend" << "Ordenes en que se vendio\n";
+    cout << string(65, '-') << endl;
+
+    bool huboVentas = false;
+
+    for (size_t i = 0; i < productos.size(); i++) {
+        int idProd = productos[i].idProducto;
+        int totalVendido = 0;
+        string listaOrdenes = "";
+
+        for (size_t j = 0; j < ordenes.size(); j++) {
+            for (size_t k = 0; k < ordenes[j].productos.size(); k++) {
+                if (ordenes[j].productos[k].producto.idProducto == idProd) {
+                    totalVendido += ordenes[j].productos[k].cantidad;
+                    listaOrdenes += "#" + enteroAString(ordenes[j].idOrden) + " ";
+                }
+            }
+        }
+
+        if (totalVendido > 0) {
+            huboVentas = true;
+            cout << left << setw(5) << idProd << setw(22) << productos[i].nombre << setw(10) << totalVendido << listaOrdenes << endl;
+        }
+    }
+
+    if (!huboVentas) {
+        cout << "Aun no se han realizado ventas en la plataforma.\n";
+    }
+}
+
+// ============================================================
+// MODULO DE GANANCIAS Y BONOS (PUNTO 4)
+// ============================================================
+
+void moduloGananciasYBonos() {
+    cout << "\n===== MODULO DE GANANCIAS Y BONOS (PUNTO 4) =====\n";
+    
+    double totalSubtotales = 0.0;
+    double totalImpuestos = 0.0;
+    double totalGanancias = 0.0;
+
+    // a. Calcular acumulados de todas las órdenes realizadas
+    for (size_t i = 0; i < ordenes.size(); i++) {
+        totalSubtotales += ordenes[i].subtotal;
+        totalImpuestos += ordenes[i].impuestos;
+        totalGanancias += ordenes[i].total;
+    }
+
+    cout << "[a] Historial Acumulado de la Plataforma:\n";
+    cout << "    Subtotal Total  : $" << fixed << setprecision(2) << totalSubtotales << endl;
+    cout << "    Impuestos Totales: $" << fixed << setprecision(2) << totalImpuestos << endl;
+    cout << "    Total Neto      : $" << fixed << setprecision(2) << totalGanancias << endl;
+
+    // b. Ingresar valor x para obsequiar el bono del 50%
+    double x;
+    cout << "\n[b] Ingrese el valor 'x' limite para otorgar bonos de descuento: ";
+    cin >> x;
+
+    cout << "\n--- Verificando ordenes que superan el valor $" << x << " ---\n";
+    bool seAsignaronBonos = false;
+
+    for (size_t i = 0; i < ordenes.size(); i++) {
+        if (ordenes[i].total > x) {
+            seAsignaronBonos = true;
+            Usuario* u = buscarUsuarioPorId(ordenes[i].usuario.idUsuario);
+            if (u) {
+                if (!u->tieneBono50) {
+                    u->tieneBono50 = true;
+                    cout << " -> [BONO ASIGNADO] La Orden #" << ordenes[i].idOrden 
+                         << " de " << u->nombre << " (Total: $" << ordenes[i].total 
+                         << ") supero el valor X. ¡Se le otorgo 50% de descuento para su proximo carro!\n";
+                } else {
+                    cout << " -> [INFO] El usuario " << u->nombre << " ya cuenta con un bono activo.\n";
+                }
+            }
+        }
+    }
+
+    if (!seAsignaronBonos) {
+        cout << "Ninguna orden de compra registrada ha superado el valor de $" << x << ".\n";
+    }
+}
+
+// ============================================================
+// REQUERIMIENTOS EXTRAS / MENÚS
+// ============================================================
+
 int login() {
     string correo, clave;
-
-    cout << "Correo: ";
-    cin >> correo;
-    cout << "Contrasena: ";
-    cin >> clave;
+    cout << "Correo: "; cin >> correo;
+    cout << "Contrasena: "; cin >> clave;
 
     for (size_t i = 0; i < usuarios.size(); i++) {
-        if (usuarios[i].correoElectronico == correo &&
-            usuarios[i].contrasena == clave) {
+        if (usuarios[i].correoElectronico == correo && usuarios[i].contrasena == clave) {
             return usuarios[i].idUsuario;
         }
     }
@@ -570,44 +593,14 @@ void listarStockBajo() {
     cout << "\n--- PRODUCTOS CON STOCK MENOR A 15 ---\n";
     for (size_t i = 0; i < productos.size(); i++) {
         if (productos[i].stock < 15) {
-            cout << productos[i].idProducto << ". "
-                 << productos[i].nombre << " - Stock: "
-                 << productos[i].stock << endl;
+            cout << productos[i].idProducto << ". " << productos[i].nombre << " - Stock: " << productos[i].stock << endl;
         }
-    }
-}
-
-void listarComentariosDesdeFecha() {
-    string fecha;
-    cout << "Ingrese fecha (YYYY-MM-DD): ";
-    cin >> fecha;
-
-    cout << "\n--- COMENTARIOS DESDE " << fecha << " ---\n";
-    for (size_t i = 0; i < comentarios.size(); i++) {
-        if (comentarios[i].fecha >= fecha) {
-            cout << "[" << comentarios[i].fecha << "] "
-                 << comentarios[i].productoNombre << " - "
-                 << comentarios[i].usuarioNombre << ": "
-                 << comentarios[i].texto << endl;
-        }
-    }
-}
-
-void listarUsuarios() {
-    cout << "\n--- USUARIOS ---\n";
-    for (size_t i = 0; i < usuarios.size(); i++) {
-        cout << "ID: " << usuarios[i].idUsuario
-             << " | NOMBRE: " << aMayusculas(usuarios[i].nombre)
-             << " | CORREO: " << usuarios[i].correoElectronico << endl;
     }
 }
 
 void menuCarrito(int idUsuario) {
     Usuario* u = buscarUsuarioPorId(idUsuario);
-    if (!u) {
-        cout << "[!] Usuario no encontrado.\n";
-        return;
-    }
+    if (!u) return;
 
     int opcion;
     do {
@@ -619,40 +612,13 @@ void menuCarrito(int idUsuario) {
         cout << "2. Ver productos de un carrito\n";
         cout << "3. Agregar producto a carrito\n";
         cout << "4. Pagar carrito (genera orden)\n";
-        cout << "5. Ver catalogo completo\n";
         cout << "0. Volver\n";
-        cout << "Opcion: ";
-        cin >> opcion;
+        cout << "Opcion: "; cin >> opcion;
 
-        if (opcion == 1) {
-            crearCarrito(idUsuario);
-            system("pause");
-        }
-        else if (opcion == 2) {
-            int idC;
-            cout << "Numero de carrito: ";
-            cin >> idC;
-            listarCarrito(idC, idUsuario);
-            system("pause");
-        }
-        else if (opcion == 3) {
-            int idC;
-            cout << "Numero de carrito: ";
-            cin >> idC;
-            agregarAlCarrito(idC, idUsuario);
-            system("pause");
-        }
-        else if (opcion == 4) {
-            int idC;
-            cout << "Numero de carrito a pagar: ";
-            cin >> idC;
-            pagarCarrito(idC, idUsuario);
-            system("pause");
-        }
-        else if (opcion == 5) {
-            mostrarCatalogo();
-            system("pause");
-        }
+        if (opcion == 1) { crearCarrito(idUsuario); system("pause"); }
+        else if (opcion == 2) { int idC; cout << "Numero de carrito: "; cin >> idC; listarCarrito(idC, idUsuario); system("pause"); }
+        else if (opcion == 3) { int idC; cout << "Numero de carrito: "; cin >> idC; agregarAlCarrito(idC, idUsuario); system("pause"); }
+        else if (opcion == 4) { int idC; cout << "Numero de carrito a pagar: "; cin >> idC; pagarCarrito(idC, idUsuario); system("pause"); }
     } while (opcion != 0);
 }
 
@@ -660,42 +626,26 @@ void menuPrincipal() {
     int opcion;
     do {
         cout << "\n========== TIENDA ONLINE ==========\n";
-        cout << "1. Seleccionar usuario\n";
-        cout << "2. Ver catalogo completo\n";
-        cout << "3. Ver usuarios\n";
-        cout << "4. Ver productos con stock menor a 15\n";
-        cout << "5. Ver comentarios desde una fecha\n";
+        cout << "1. Ingresar al modulo de compras (Carritos)\n";
+        cout << "2. Ver catalogo completo de productos\n";
+        cout << "3. Ver productos mas vendidos (Punto 3)\n";
+        cout << "4. Ver productos con stock bajo (<15)\n";
+        cout << "5. Ver ganancias y asignar bonos (Punto 4)\n"; // AGREGADO
         cout << "0. Salir\n";
-        cout << "Opcion: ";
-        cin >> opcion;
+        cout << "Opcion: "; cin >> opcion;
 
         if (opcion == 1) {
-            cout << "\n--- USUARIOS DISPONIBLES ---\n";
+            cout << "\n--- SELECCIONAR USUARIO DE SESION ---\n";
             for (size_t i = 0; i < usuarios.size(); i++) {
-                cout << "  [" << usuarios[i].idUsuario << "] "
-                     << usuarios[i].nombre << endl;
+                cout << "  [" << usuarios[i].idUsuario << "] " << usuarios[i].nombre << endl;
             }
-            cout << "ID de usuario: ";
-            int id;
-            cin >> id;
+            cout << "ID de usuario: "; int id; cin >> id;
             menuCarrito(id);
         }
-        else if (opcion == 2) {
-            mostrarCatalogo();
-            system("pause");
-        }
-        else if (opcion == 3) {
-            listarUsuarios();
-            system("pause");
-        }
-        else if (opcion == 4) {
-            listarStockBajo();
-            system("pause");
-        }
-        else if (opcion == 5) {
-            listarComentariosDesdeFecha();
-            system("pause");
-        }
+        else if (opcion == 2) { mostrarCatalogo(); system("pause"); }
+        else if (opcion == 3) { listarProductosMasVendidos(); system("pause"); }
+        else if (opcion == 4) { listarStockBajo(); system("pause"); }
+        else if (opcion == 5) { moduloGananciasYBonos(); system("pause"); } // AGREGADO
     } while (opcion != 0);
 }
 
